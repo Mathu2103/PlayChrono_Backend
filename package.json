@@ -23,6 +23,7 @@
   "dependencies": {
     "cors": "^2.8.5",
     "dotenv": "^17.2.3",
+    "expo": "^54.0.30",
     "express": "^5.2.1",
     "firebase-admin": "^13.6.0"
   }

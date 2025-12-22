@@ -13,19 +13,61 @@ const normalizeDate = (dateStr) => {
     }
 };
 
-// Ground Definitions (Static logic for robustness)
-const GROUNDS = [
-    {
-        groundId: 'g1',
-        groundName: 'Central Ground',
-        slots: ['08:00 - 10:00', '10:00 - 12:00', '14:00 - 16:00', '16:00 - 18:00', '18:00 - 20:00']
-    },
-    {
-        groundId: 'g2',
-        groundName: 'North Arena',
-        slots: ['08:00 - 10:00', '10:00 - 12:00', '14:00 - 16:00']
+// Utility: Generate Time Slots
+const generateSlots = (startHour, endHour) => {
+    const slots = [];
+    for (let i = startHour; i < endHour; i += 2) {
+        // e.g., "06:00 - 08:00"
+        const start = String(i).padStart(2, '0') + ':00';
+        const end = String(i + 2).padStart(2, '0') + ':00';
+        slots.push(`${start} - ${end}`);
     }
-];
+    return slots;
+};
+
+// Sport-Specific Ground Configuration
+// Sport-Specific Ground Configuration
+const getGroundsForSport = (sport) => {
+    const s = sport.toLowerCase().trim();
+
+    // Group 1: Football, Cricket, Elle, Track Meets -> 2 Grounds, 06:00 - 22:00
+    if (['football', 'cricket', 'elle', 'track meets', 'track'].includes(s)) {
+        const slots = generateSlots(6, 22);
+        return [
+            { groundId: 'arena_main', groundName: 'Main Arena', slots: slots },
+            { groundId: 'arena_north', groundName: 'North Arena', slots: slots }
+        ];
+    }
+
+    // Group 2: Badminton -> 2 Grounds, 06:00 - 20:00
+    if (s === 'badminton') {
+        const slots = generateSlots(6, 20);
+        return [
+            { groundId: 'court_shuttler_1', groundName: 'Shuttler’s Court 1', slots: slots },
+            { groundId: 'court_shuttler_2', groundName: 'Shuttler’s Court 2', slots: slots }
+        ];
+    }
+
+    // Group 3: Table Tennis -> 2 Halls, 06:00 - 20:00
+    if (s === 'table tennis' || s === 'tabletennis') {
+        const slots = generateSlots(6, 20);
+        return [
+            { groundId: 'hall_pp_a', groundName: 'Ping Pong Hall A', slots: slots },
+            { groundId: 'hall_pp_b', groundName: 'Ping Pong Hall B', slots: slots }
+        ];
+    }
+
+    // Group 4: Volleyball -> 1 Ground, 06:00 - 22:00
+    if (s === 'volleyball') {
+        const slots = generateSlots(6, 22);
+        return [
+            { groundId: 'court_spike', groundName: 'Spike Court', slots: slots }
+        ];
+    }
+
+    // Default: Return empty or generic if unknown sport
+    return [];
+};
 
 // 1. Get Available Slots
 exports.getAvailableSlots = async (req, res) => {
@@ -42,18 +84,22 @@ exports.getAvailableSlots = async (req, res) => {
             return res.status(400).json({ success: false, error: "Invalid date format. Use YYYY-MM-DD" });
         }
 
-        const normalizedSport = sport.toLowerCase();
+        // Get Grounds CONFIG based on sport
+        const targetGrounds = getGroundsForSport(sport);
+
+        if (targetGrounds.length === 0) {
+            return res.status(404).json({ success: false, error: "No grounds found for this sport" });
+        }
 
         // Check DB for existing bookings for this date
-        // Note: In a real app, you might filter by sport/ground specific logic.
         const bookingsRef = db.collection('bookings');
         const snapshot = await bookingsRef
             .where('date', '==', validDate)
-            .where('status', '==', 'confirmed') // Only confirmed bookings block slots
+            .where('status', '==', 'confirmed')
             .get();
 
         // Map booked slots by ground
-        const bookedSlotsByGround = {}; // { g1: ['10:00 - 12:00'], g2: [] }
+        const bookedSlotsByGround = {};
 
         snapshot.forEach(doc => {
             const data = doc.data();
@@ -63,12 +109,12 @@ exports.getAvailableSlots = async (req, res) => {
             }
         });
 
-        // Construct Response
-        const responseGrounds = GROUNDS.map(ground => {
+        // Construct Response using DYNAMIC grounds
+        const responseGrounds = targetGrounds.map(ground => {
             const booked = bookedSlotsByGround[ground.groundId] || [];
 
-            const processedSlots = ground.slots.map((time, index) => ({
-                id: `s${index}_${ground.groundId}`, // Unique Slot ID
+            const processedSlots = ground.slots.map((time) => ({
+                id: `${ground.groundId}_${time.replace(/[:\s]/g, '')}`, // Robust ID
                 time: time,
                 status: booked.includes(time) ? 'booked' : 'available'
             }));
@@ -89,7 +135,6 @@ exports.getAvailableSlots = async (req, res) => {
 
     } catch (error) {
         console.error("Error in getAvailableSlots:", error);
-        // Force JSON response even on crash
         return res.status(500).json({ success: false, error: "Internal Server Error" });
     }
 };
@@ -97,7 +142,7 @@ exports.getAvailableSlots = async (req, res) => {
 // 2. Create Booking
 exports.createBooking = async (req, res) => {
     try {
-        const { captainId, captainName, sportType, groundId, groundName, date, selectedSlots, purpose } = req.body;
+        const { captainId, captainName, teamName, sportType, groundId, groundName, date, selectedSlots, purpose } = req.body;
 
         // Validation
         if (!captainId || !groundId || !date || !selectedSlots || !Array.isArray(selectedSlots) || selectedSlots.length === 0) {
@@ -137,6 +182,7 @@ exports.createBooking = async (req, res) => {
                 bookingId: newBookingRef.id,
                 captainId,
                 captainName: captainName || 'Unknown Captain',
+                teamName: teamName || 'Unknown Team',
                 sportType: sportType || 'Sports',
                 groundId,
                 groundName: groundName || 'Unknown Ground',
@@ -206,5 +252,50 @@ exports.getCaptainBookings = async (req, res) => {
     } catch (error) {
         console.error("Error in getCaptainBookings:", error);
         return res.status(500).json({ success: false, error: "Failed to fetch bookings" });
+    }
+};
+
+// 4. Get Today's Bookings (For Notices)
+exports.getTodayBookings = async (req, res) => {
+    try {
+        // Get today's date in YYYY-MM-DD
+        const today = new Date();
+        const year = today.getFullYear();
+        const month = String(today.getMonth() + 1).padStart(2, '0');
+        const day = String(today.getDate()).padStart(2, '0');
+        const validDate = `${year}-${month}-${day}`;
+
+        console.log(`Fetching bookings for Today: ${validDate}`);
+
+        const bookingsRef = db.collection('bookings');
+        const snapshot = await bookingsRef
+            .where('date', '==', validDate)
+            .where('status', '==', 'confirmed')
+            .get();
+
+        if (snapshot.empty) {
+            return res.status(200).json({ success: true, bookings: [] });
+        }
+
+        const bookings = [];
+        snapshot.forEach(doc => {
+            const data = doc.data();
+            // Transform data for the simplified Notices view
+            bookings.push({
+                bookingId: data.bookingId,
+                groundName: data.groundName,
+                timeSlots: data.selectedSlots.join(', '),
+                purpose: data.purpose,
+                captainName: data.captainName,
+                captainName: data.captainName,
+                teamName: data.teamName || data.captainName // Use teamName if available, else fallback
+            });
+        });
+
+        return res.status(200).json({ success: true, bookings });
+
+    } catch (error) {
+        console.error("Error in getTodayBookings:", error);
+        return res.status(500).json({ success: false, error: "Failed to fetch notices" });
     }
 };

@@ -1,0 +1,12 @@
+# Dependencies
+node_modules/
+
+# Environment variables
+.env
+
+# Firebase / Google credentials
+*.json
+src/config/*.json
+
+# Expo (optional, but recommended)
+.expo/

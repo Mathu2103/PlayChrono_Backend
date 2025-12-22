@@ -12,7 +12,7 @@ app.use(express.json());
 
 // Request Logger
 app.use((req, res, next) => {
-    console.log(`Incoming: ${req.method} ${req.url}`);
+    console.log(`Incoming: ${req.method} ${req.url}`, req.body);
     next();
 });
 
