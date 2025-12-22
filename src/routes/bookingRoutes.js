@@ -1,3 +1,4 @@
+const express = require('express');
 const { getAvailableSlots, createBooking, getCaptainBookings, getTodayBookings } = require('../controllers/bookingsController');
 
 console.log('Booking Controller Imports Check:');
