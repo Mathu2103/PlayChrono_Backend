@@ -300,3 +300,107 @@ exports.getTodayBookings = async (req, res) => {
         return res.status(500).json({ success: false, error: "Failed to fetch notices" });
     }
 };
+
+// 5. Get All Bookings (Admin)
+exports.getAllBookings = async (req, res) => {
+    try {
+        const bookingsRef = db.collection('bookings');
+
+        // 1. Get Today's Date String
+        const now = new Date();
+        const year = now.getFullYear();
+        const month = String(now.getMonth() + 1).padStart(2, '0');
+        const day = String(now.getDate()).padStart(2, '0');
+        const todayStr = `${year}-${month}-${day}`;
+
+        // 2. Fetch bookings from today onwards
+        const snapshot = await bookingsRef
+            .where('date', '>=', todayStr)
+            .orderBy('date', 'asc')
+            .get();
+
+        if (snapshot.empty) {
+            return res.status(200).json({ success: true, bookings: [] });
+        }
+
+        const validBookings = [];
+        const currentHour = now.getHours();
+        const currentMin = now.getMinutes();
+        const currentTimeVal = currentHour * 60 + currentMin; // Minutes from midnight
+
+        snapshot.forEach(doc => {
+            const data = doc.data();
+
+            if (!data.date) return;
+
+            // Strict Future Dates -> VALID
+            if (data.date > todayStr) {
+                validBookings.push(data);
+            }
+            // Today's Dates -> Check Time
+            else if (data.date === todayStr) {
+                const slots = data.selectedSlots || [];
+                let maxEndMinutes = 0;
+
+                // Parse slots to find when the booking finishes
+                slots.forEach(slot => {
+                    // slot: "06:00 - 08:00"
+                    const parts = slot.split(' - ');
+                    if (parts.length === 2) {
+                        const endTime = parts[1]; // "08:00"
+                        const [endH, endM] = endTime.split(':').map(Number);
+                        const endTotalMinutes = endH * 60 + endM;
+                        if (endTotalMinutes > maxEndMinutes) {
+                            maxEndMinutes = endTotalMinutes;
+                        }
+                    }
+                });
+
+                // If currently BEFORE the end time, it is Active
+                if (currentTimeVal < maxEndMinutes) {
+                    validBookings.push(data);
+                }
+            }
+        });
+
+        return res.status(200).json({ success: true, bookings: validBookings });
+
+    } catch (error) {
+        console.error("Error in getAllBookings:", error);
+
+        // Fallback catch-all for potential index errors or other issues
+        try {
+            // Simplified fallback: Fetch all active/future without complex filtering if index fails
+            const todayStr = new Date().toISOString().split('T')[0];
+            const bookingsRef = db.collection('bookings');
+            const snapshot = await bookingsRef.where('date', '>=', todayStr).get();
+
+            const bookings = [];
+            snapshot.forEach(doc => { bookings.push(doc.data()) });
+
+            // Just return date-filtered list to be safe if time-logic fails in fallback
+            bookings.sort((a, b) => new Date(a.date) - new Date(b.date));
+            return res.status(200).json({ success: true, bookings });
+        } catch (err) {
+            return res.status(500).json({ success: false, error: "Failed to fetch bookings" });
+        }
+    }
+};
+
+// 6. Delete Booking (Admin)
+exports.deleteBooking = async (req, res) => {
+    try {
+        const { bookingId } = req.params;
+
+        if (!bookingId) {
+            return res.status(400).json({ success: false, error: "Booking ID is required" });
+        }
+
+        await db.collection('bookings').doc(bookingId).delete();
+
+        return res.status(200).json({ success: true, message: "Booking deleted successfully" });
+    } catch (error) {
+        console.error("Error in deleteBooking:", error);
+        return res.status(500).json({ success: false, error: "Failed to delete booking" });
+    }
+};

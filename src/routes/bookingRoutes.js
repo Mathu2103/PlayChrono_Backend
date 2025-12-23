@@ -1,5 +1,5 @@
 const express = require('express');
-const { getAvailableSlots, createBooking, getCaptainBookings, getTodayBookings } = require('../controllers/bookingsController');
+const { getAvailableSlots, createBooking, getCaptainBookings, getTodayBookings, getAllBookings, deleteBooking } = require('../controllers/bookingsController');
 
 console.log('Booking Controller Imports Check:');
 console.log('getAvailableSlots:', typeof getAvailableSlots);
@@ -19,5 +19,11 @@ router.get('/my-bookings/:captainId', getCaptainBookings);
 
 // Get all bookings for today (Notices)
 router.get('/today', getTodayBookings);
+
+// Get all bookings (Admin)
+router.get('/all', getAllBookings);
+
+// Delete a booking (Admin)
+router.delete('/:bookingId', deleteBooking);
 
 module.exports = router;

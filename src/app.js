@@ -24,6 +24,15 @@ const bookingRoutes = require('./routes/bookingRoutes');
 console.log('Loading Booking Routes at /api/bookings');
 app.use('/api/bookings', bookingRoutes);
 
+const userRoutes = require('./routes/userRoutes');
+app.use('/api/users', userRoutes);
+
+const noticeRoutes = require('./routes/noticeRoutes');
+app.use('/api/notices', noticeRoutes);
+
+const adminRoutes = require('./routes/adminRoutes');
+app.use('/api/admin', adminRoutes);
+
 // Test Route
 app.get('/', (req, res) => {
     res.status(200).json({ message: 'PlayChrono Backend is running!' });
