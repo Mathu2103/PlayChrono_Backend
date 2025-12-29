@@ -5,8 +5,7 @@ node_modules/
 .env
 
 # Firebase / Google credentials
-# *.json
-src/config/*.json
+src/config/firebase-key.json
 
-# Expo (optional, but recommended)
+# Expo (optional)
 .expo/
